@@ -594,10 +594,120 @@ function cerrarSesion() {
     };
 
     // Evento de envío del formulario
-    document.getElementById("colectorForm").addEventListener("submit", function(e) {
-        e.preventDefault();
-        alert("✅ Datos y fotos de guardia registrados localmente con éxito. Los parámetros de 24 horas están listos para alimentar los gráficos de descarga y tendencias.");
+    // URL DE TU WEB APP DE GOOGLE APPS SCRIPT (Pega tu URL generada aquí)
+const URL_API_GOOGLESHEETS = "https://script.google.com/macros/s/AKfycbw8X1UsQXLOpdmC2k5SaHjQGRRwzL8I-OViSVJ9IDuGjtqoOf_3t-b_6wNnDJkMt3d1/exec";
+
+document.getElementById("colectorForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+    
+    const btnSubmit = document.querySelector(".btn-submit");
+    btnSubmit.disabled = true;
+    btnSubmit.innerText = "⏳ Guardando y subiendo imágenes a Drive...";
+
+    try {
+        // 1. Recopilar datos generales y parámetros
+        const payload = {
+            fecha: document.getElementById("fecha").value,
+            turno: document.getElementById("turno").value,
+            inspector: document.getElementById("inspector").value,
+            actividades: document.getElementById("actividades").value,
+            parametrosGenerales: {
+                lubPresion: document.getElementById("lub_presion").value,
+                lubTempTanque: document.getElementById("lub_temp_tanque").value,
+                lubTempSalida: document.getElementById("lub_temp_salida").value,
+                compuertaApertura: document.getElementById("compuerta_apertura").value,
+                tanquePresion: document.getElementById("tanque_presion").value,
+                sopEntrada: document.getElementById("sop_entrada").value,
+                sopSalida: document.getElementById("sop_salida").value,
+                sopTransmisor: document.getElementById("sop_transmisor").value,
+                humNivel: document.getElementById("hum_nivel").value,
+                tolvaMot01: document.getElementById("tolva_mot_01").value,
+                tolvaMot02: document.getElementById("tolva_mot_02").value,
+                tolvaMot03: document.getElementById("tolva_mot_03").value
+            },
+            tolvas: [],
+            monitoreo24H: [],
+            fotos: []
+        };
+
+        // 2. Recopilar datos de descarga de tolvas
+        const filasTolva = document.querySelectorAll("#tablaTolvasBody tr");
+        filasTolva.forEach((row, idx) => {
+            const num = idx + 1;
+            const horario = row.querySelector(`[name="tolva_horario_${num}"]`)?.value;
+            if (horario) {
+                payload.tolvas.push({
+                    num: num,
+                    turno: row.querySelector(`[name="tolva_turno_${num}"]`).value,
+                    horario: horario,
+                    duracion: row.querySelector(`[name="tolva_duracion_${num}"]`).value,
+                    frente: row.querySelector(`[name="tolva_frente_${num}"]`).value,
+                    toneladas: row.querySelector(`[name="tolva_tn_${num}"]`).value
+                });
+            }
+        });
+
+        // 3. Recopilar monitoreo de 24 horas
+        cicloOperativo.forEach((item, index) => {
+            payload.monitoreo24H.push({
+                hora: item.hora,
+                turno: item.turno,
+                compuerta: document.querySelector(`[name="comp_${index}"]`).value,
+                vibMotriz: document.querySelector(`[name="vib_mot_${index}"]`).value,
+                vibLibre: document.querySelector(`[name="vib_lib_${index}"]`).value,
+                motAcople: document.querySelector(`[name="mot_acop_${index}"]`).value,
+                motVentilador: document.querySelector(`[name="mot_vent_${index}"]`).value,
+                chumMotriz: document.querySelector(`[name="chum_mot_${index}"]`).value,
+                chumLibre: document.querySelector(`[name="chum_lib_${index}"]`).value,
+                lubricacion: document.querySelector(`[name="lub_${index}"]`).value,
+                aireComprimido: document.querySelector(`[name="aire_${index}"]`).value
+            });
+        });
+
+        // 4. Procesar fotos cargadas y convertirlas a Base64
+        const fotosInput = document.getElementById("fotosInput");
+        if (fotosInput.files && fotosInput.files.length > 0) {
+            for (let i = 0; i < fotosInput.files.length; i++) {
+                const file = fotosInput.files[i];
+                const base64 = await convertirFileABase64(file);
+                const descInput = document.querySelector(`[name="descripcion_foto_${i}"]`);
+                payload.fotos.push({
+                    base64: base64,
+                    type: file.type,
+                    descripcion: descInput ? descInput.value : "Sin descripción"
+                });
+            }
+        }
+
+        // 5. Enviar payload mediante POST a Google Apps Script
+        const response = await fetch(URL_API_GOOGLESHEETS, {
+            method: "POST",
+            mode: "no-cors", // Para permitir el envío desde Vercel sin bloqueo CORS
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        alert("✅ Guardia registrada correctamente. La información se consolidó en Google Sheets y las imágenes se guardaron en Google Drive.");
+        location.reload();
+
+    } catch (err) {
+        console.error(err);
+        alert("❌ Ocurrió un error al intentar guardar la información.");
+    } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = "GUARDAR Y REVISAR DATOS DE GUARDIA";
+    }
+});
+
+// Función auxiliar de conversión de archivos
+function convertirFileABase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
     });
+}
 </script>
 
 </body>
