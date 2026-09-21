@@ -149,9 +149,106 @@
         }
         .bg-dia { background-color: #f39c12; }
         .bg-noche { background-color: #2c3e50; }
+		/* ESTILOS PARA LA PANTALLA DE LOGIN */
+		.login-overlay {
+		    position: fixed;
+		    top: 0;
+		    left: 0;
+		    width: 100%;
+		    height: 100%;
+		    background-color: var(--light);
+		    display: flex;
+		    justify-content: center;
+		    align-items: center;
+		    z-index: 1000;
+		}
+		
+		.login-card {
+		    background: #ffffff;
+		    padding: 30px;
+		    border-radius: 8px;
+		    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+		    width: 90%;
+		    max-width: 400px;
+		    text-align: center;
+		    border-top: 5px solid var(--primary);
+		}
+		
+		.login-card h2 {
+		    margin-bottom: 5px;
+		}
+		
+		.login-card p {
+		    font-size: 0.85em;
+		    color: #666;
+		    margin-bottom: 20px;
+		}
+		
+		.error-msg {
+		    color: var(--primary);
+		    font-size: 0.85em;
+		    font-weight: bold;
+		    display: none;
+		    margin-top: 10px;
+		}
+		
+		.header-user {
+		    display: flex;
+		    justify-content: space-between;
+		    align-items: center;
+		    background: #e9ecef;
+		    padding: 10px 15px;
+		    border-radius: 6px;
+		    margin-bottom: 15px;
+		    font-size: 0.9em;
+		}
+		
+		.btn-logout {
+		    background: #7f8c8d;
+		    color: white;
+		    border: none;
+		    padding: 5px 10px;
+		    border-radius: 4px;
+		    cursor: pointer;
+		    font-size: 0.85em;
+		}
     </style>
 </head>
 <body>
+	<!-- PANTALLA SOBREPUESTA DE LOGIN -->
+<div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+        <h2>ACCESO A PLANTA</h2>
+        <p>Servicio de Colector de Polvos - Planta Beneficio Nueva</p>
+        
+        <form id="loginForm">
+            <label for="loginUser" style="text-align: left;">Inspector / Usuario:</label>
+            <select id="loginUser" required style="margin-bottom: 15px;">
+                <option value="">-- Seleccionar Inspector --</option>
+                <option value="Rafael Martínez">Rafael Martínez</option>
+                <option value="Ing. Roy Giron">Ing. Roy Giron</option>
+                <option value="Inspector Guardia Día">Inspector Guardia Día</option>
+                <option value="Inspector Guardia Noche">Inspector Guardia Noche</option>
+            </select>
+
+            <label for="loginPass" style="text-align: left;">Contraseña de Turno:</label>
+            <input type="password" id="loginPass" placeholder="Ingrese contraseña" required>
+
+            <button type="submit" class="btn-submit" style="margin-top: 10px;">INGRESAR AL SISTEMA</button>
+            <div id="errorMsg" class="error-msg">❌ Contraseña incorrecta. Intente nuevamente.</div>
+        </form>
+    </div>
+</div>
+
+<!-- CONTENEDOR PRINCIPAL DEL FORMULARIO (Agregar un ID "appContent") -->
+<div class="container" id="appContent" style="display: none;">
+    <!-- BARRA SUPERIOR CON SESIÓN ACTIVA -->
+    <div class="header-user">
+        <span>👤 Inspector Activo: <strong id="userDisplay">-</strong></span>
+        <button class="btn-logout" onclick="cerrarSesion()">Cerrar Sesión</button>
+    </div>
+
+    <!-- AQUÍ CONTINÚA TU FORMULARIO ACTUAL DE REGISTRO DIARIO ... -->
 
 <div class="container">
     <h2>REPORTE DIARIO DE OPERACIONES - COLECTOR DE POLVOS</h2>
@@ -326,6 +423,65 @@
 </div>
 
 <script>
+	// CONFIGURACIÓN DE CREDENCIALES (Puedes cambiar la contraseña aquí)
+const CREDENCIALES = {
+    passValida: "shougang2026" // Contraseña general de acceso en planta
+};
+
+// Verificar estado de sesión al cargar la página
+window.addEventListener('DOMContentLoaded', () => {
+    const usuarioGuardado = localStorage.getItem('colector_usuario');
+    
+    if (usuarioGuardado) {
+        // Si ya hay sesión iniciada, mostrar directamente el formulario
+        iniciarSesionCorrecta(usuarioGuardado);
+    } else {
+        // Si no hay sesión, mostrar pantalla de login
+        document.getElementById('loginOverlay').style.display = 'flex';
+        document.getElementById('appContent').style.display = 'none';
+    }
+    
+    // Inicializar tablas del formulario
+    renderizarTabla24Horas();
+    agregarFilaTolva();
+    agregarFilaTolva();
+});
+
+// Manejo del formulario de Login
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const usuario = document.getElementById('loginUser').value;
+    const pass = document.getElementById('loginPass').value;
+    const errorMsg = document.getElementById('errorMsg');
+
+    if (pass === CREDENCIALES.passValida) {
+        errorMsg.style.display = 'none';
+        // Guardar sesión en el almacenamiento local del teléfono
+        localStorage.setItem('colector_usuario', usuario);
+        iniciarSesionCorrecta(usuario);
+    } else {
+        errorMsg.style.display = 'block';
+    }
+});
+
+// Función para activar la interfaz principal
+function iniciarSesionCorrecta(usuario) {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('appContent').style.display = 'block';
+    document.getElementById('userDisplay').innerText = usuario;
+    
+    // Asignar automáticamente el nombre del inspector en la Sección 1 del formulario
+    const inputInspector = document.getElementById('inspector');
+    if (inputInspector) {
+        inputInspector.value = usuario;
+    }
+}
+
+// Función para cerrar sesión
+function cerrarSesion() {
+    localStorage.removeItem('colector_usuario');
+    location.reload(); // Recargar la página para volver al login
+}
     // 24 horas del ciclo operativo continuo (de 07:00 a 07:00 del día siguiente)
     const cicloOperativo = [
         { hora: "07:00", turno: "DIA" },
