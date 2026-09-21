@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte Operativo Diario - Colector de Polvos</title>
+    <style>
+        :root {
+            --primary: #c8102e; /* Rojo industrial Shougang */
+            --dark: #1e1e1e;
+            --light: #f4f6f9;
+            --border: #cccccc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--light);
+            margin: 0;
+            padding: 15px;
+            color: var(--dark);
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        h2, h3 {
+            color: var(--primary);
+            margin-top: 0;
+        }
+
+        .section {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 18px;
+            margin-bottom: 22px;
+            background: #fafafa;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media (max-width: 600px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82em;
+            background: #fff;
+        }
+
+        th, td {
+            border: 1px solid var(--border);
+            padding: 6px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #e9ecef;
+            position: sticky;
+            top: 0;
+        }
+
+        table input, table select {
+            margin-bottom: 0;
+            padding: 4px;
+            font-size: 0.95em;
+            text-align: center;
+        }
+
+        /* Formato para lista de fotos con pie de foto */
+        .photo-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 12px;
+            background: #fff;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+        }
+
+        .photo-item img {
+            width: 90px;
+            height: 90px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .photo-item input {
+            margin-bottom: 0;
+        }
+
+        .btn-submit {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 14px 20px;
+            font-size: 1.05em;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.3s;
+        }
+
+        .btn-submit:hover {
+            background-color: #a00c23;
+        }
+
+        .badge-turno {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            font-weight: bold;
+            color: white;
+        }
+        .bg-dia { background-color: #f39c12; }
+        .bg-noche { background-color: #2c3e50; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>REPORTE DIARIO DE OPERACIONES - COLECTOR DE POLVOS</h2>
+    <p><em>Servicio de Colector de Polvo - Planta Beneficio Nueva</em></p>
+
+    <form id="colectorForm">
+        
+        <!-- SECCIÓN 1: DATOS GENERALES -->
+        <div class="section">
+            <h3>1. Datos Generales</h3>
+            <div class="grid-2">
+                <div>
+                    <label for="fecha">Fecha de Inicio de Guardia:</label>
+                    <input type="date" id="fecha" required>
+                </div>
+                <div>
+                    <label for="turno">Turno Operativo:</label>
+                    <select id="turno" onchange="filtrarHorasPorTurno()" required>
+                        <option value="DIA">DÍA (07:00 a 19:00 hrs)</option>
+                        <option value="NOCHE">NOCHE (19:00 a 07:00 hrs [+1 día])</option>
+                    </select>
+                </div>
+            </div>
+            <label for="inspector">Elaborado por (Supervisor/Inspector):</label>
+            <input type="text" id="inspector" placeholder="Ej: Rafael Martínez" required>
+        </div>
+
+        <!-- SECCIÓN 2: TABLA SISTEMA DE COLECTOR DE POLVOS -->
+        <div class="section">
+            <h3>2. Sistemas de Colector de Polvos en Operación</h3>
+            <p style="font-size: 0.85em; color: #555;">Parámetros generales de operación registrados en el turno:</p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Área</th>
+                            <th>Variables Operacionales</th>
+                            <th>Valor Registrado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td rowspan="3"><strong>SISTEMA DE LUBRICACIÓN</strong></td>
+                            <td>Presión de aceite (MPa)[cite: 1]</td>
+                            <td><input type="number" step="0.01" id="lub_presion" placeholder="Ej: 0.20"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td>Temperatura tanque (°C)[cite: 1]</td>
+                            <td><input type="number" step="0.1" id="lub_temp_tanque" placeholder="Ej: 31"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td>Temperatura de aceite - salida (°C)[cite: 1]</td>
+                            <td><input type="number" step="0.1" id="lub_temp_salida" placeholder="Ej: 29"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td><strong>COMPUERTA</strong>[cite: 1]</td>
+                            <td>Apertura de válvula de ventilador (%)[cite: 1]</td>
+                            <td><input type="number" step="0.1" id="compuerta_apertura" value="60.0"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td><strong>TANQUE DE AIRE</strong>[cite: 1]</td>
+                            <td>Presión de aire (PSI)[cite: 1]</td>
+                            <td><input type="number" step="1" id="tanque_presion" placeholder="Ej: 85"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td rowspan="3"><strong>SOPLADORES</strong>[cite: 1]</td>
+                            <td>Entrada (PSI)[cite: 1]</td>
+                            <td><input type="number" step="1" id="sop_entrada" placeholder="Ej: 85"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td>Salida (PSI)[cite: 1]</td>
+                            <td><input type="number" step="1" id="sop_salida" placeholder="Ej: 75"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td>Transmisor de aire (%)[cite: 1]</td>
+                            <td><input type="number" step="0.1" id="sop_transmisor" placeholder="Ej: 44.2"></td>[cite: 1]
+                        </tr>
+                        <tr>
+                            <td><strong>HUMIDIFICADOR</strong>[cite: 1]</td>
+                            <td>Apertura / Nivel de agua (%)[cite: 1]</td>
+                            <td><input type="text" id="hum_nivel" value="3/4"></td>[cite: 1]
+                        </tr>
+						<tr>
+							<td rowspan="3"><strong>TOLVA DE DESCARGA</strong></td>
+							<td>Nivel de aceite - Motorreductor 01 (%)</td>
+							<td><input type="text" id="tolva_mot_01" value="3/4"></td>
+						</tr>
+						<tr>
+							<td>Nivel de aceite - Motorreductor 02 (%)</td>
+							<td><input type="text" id="tolva_mot_02" value="3/4"></td>
+						</tr>
+						<tr>
+							<td>Nivel de aceite - Motorreductor 03 (%)</td>
+							<td><input type="text" id="tolva_mot_03" value="3/4"></td>
+						</tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 3: TABLA DE DESCARGA DE TOLVAS -->
+        <div class="section">
+            <h3>3. Registro de Descarga de Tolvas</h3>
+            <p style="font-size: 0.85em; color: #555;">Descargas efectuadas durante las guardias del día:</p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>N° Descarga</th>
+                            <th>Turno</th>
+                            <th>Horario</th>
+                            <th>Duración (H)</th>
+                            <th>Frente 5730-SVC</th>
+                            <th>Toneladas (Tn)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaTolvasBody">
+                        <!-- Filas dinamicas de descargas -->
+                    </tbody>
+                </table>
+            </div>
+            <button type="button" onclick="agregarFilaTolva()" style="margin-top: 10px; padding: 6px 12px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer;">+ Agregar Evento de Descarga</button>
+        </div>
+
+        <!-- SECCIÓN 4: CONTROL Y MONITOREO DE PARÁMETROS POR HORA -->
+        <div class="section">
+            <h3>4. Control y Monitoreo de Parámetros Operacionales (Horario de Guardia 07:00 a 07:00)</h3>
+            <p style="font-size: 0.85em; color: #555;">Lecturas tomadas hora a hora durante la guardia de 24 horas:</p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Hora</th>
+                            <th>Guardia</th>
+                            <th>Compuerta (%)</th>
+                            <th>Vib. Motriz (mm/s)</th>
+                            <th>Vib. Libre (mm/s)</th>
+                            <th>Motor Acople (°C)</th>
+                            <th>Motor Vent. (°C)</th>
+                            <th>Chum. Motriz (°C)</th>
+                            <th>Chum. Libre (°C)</th>
+                            <th>Lub. (MPa)</th>
+                            <th>Aire Compr. (MPa)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaHorasBody">
+                        <!-- Las 24 horas del ciclo operativo -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 5: EVIDENCIA FOTOGRÁFICA CON PIE DE FOTO -->
+        <div class="section">
+            <h3>5. Evidencia Fotográfica con Descripción</h3>
+            <label for="fotosInput">Seleccionar imágenes de la inspección:</label>
+            <input type="file" id="fotosInput" accept="image/*" multiple onchange="procesarFotos(this)">
+            
+            <div id="contenedorFotos" style="margin-top: 15px;">
+                <!-- Las fotos con su caja de descripción se renderizan aquí -->
+            </div>
+        </div>
+
+        <!-- SECCIÓN 6: OBSERVACIONES GENERALES -->
+        <div class="section">
+            <h3>6. Inspecciones y Actividades Realizadas</h3>
+            <textarea id="actividades" rows="4" placeholder="Detalle de inspecciones, limpieza de ductos, mantenimientos correctivos o novedades en planta..."></textarea>[cite: 1]
+        </div>
+
+        <button type="submit" class="btn-submit">GUARDAR Y REVISAR DATOS DE GUARDIA</button>
+    </form>
+</div>
+
+<script>
+    // 24 horas del ciclo operativo continuo (de 07:00 a 07:00 del día siguiente)
+    const cicloOperativo = [
+        { hora: "07:00", turno: "DIA" },
+        { hora: "08:00", turno: "DIA" },
+        { hora: "09:00", turno: "DIA" },
+        { hora: "10:00", turno: "DIA" },
+        { hora: "11:00", turno: "DIA" },
+        { hora: "12:00", turno: "DIA" },
+        { hora: "13:00", turno: "DIA" },
+        { hora: "14:00", turno: "DIA" },
+        { hora: "15:00", turno: "DIA" },
+        { hora: "16:00", turno: "DIA" },
+        { hora: "17:00", turno: "DIA" },
+        { hora: "18:00", turno: "DIA" },
+        { hora: "19:00", turno: "NOCHE" },
+        { hora: "20:00", turno: "NOCHE" },
+        { hora: "21:00", turno: "NOCHE" },
+        { hora: "22:00", turno: "NOCHE" },
+        { hora: "23:00", turno: "NOCHE" },
+        { hora: "00:00", turno: "NOCHE" },
+        { hora: "01:00", turno: "NOCHE" },
+        { hora: "02:00", turno: "NOCHE" },
+        { hora: "03:00", turno: "NOCHE" },
+        { hora: "04:00", turno: "NOCHE" },
+        { hora: "05:00", turno: "NOCHE" },
+        { hora: "06:00", turno: "NOCHE" }
+    ];
+
+    let contadorTolva = 0;
+
+    // Inicializar tabla de 24 horas
+    function renderizarTabla24Horas() {
+        const tbody = document.getElementById("tablaHorasBody");
+        tbody.innerHTML = "";
+
+        cicloOperativo.forEach((item, index) => {
+            const row = document.createElement("tr");
+            const badgeClass = item.turno === "DIA" ? "bg-dia" : "bg-noche";
+            
+            row.innerHTML = `
+                <td><strong>${item.hora}</strong></td>
+                <td><span class="badge-turno ${badgeClass}">${item.turno}</span></td>
+                <td><input type="number" step="0.1" name="comp_${index}" value="59.6"></td>
+                <td><input type="number" step="0.1" name="vib_mot_${index}"></td>
+                <td><input type="number" step="0.1" name="vib_lib_${index}"></td>
+                <td><input type="number" step="1" name="mot_acop_${index}"></td>
+                <td><input type="number" step="1" name="mot_vent_${index}"></td>
+                <td><input type="number" step="1" name="chum_mot_${index}"></td>
+                <td><input type="number" step="1" name="chum_lib_${index}"></td>
+                <td><input type="number" step="0.01" name="lub_${index}" value="0.20"></td>
+                <td><input type="number" step="0.01" name="aire_${index}"></td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // Agregar filas a la tabla de Descarga de Tolvas (Sección 3)
+    function agregarFilaTolva() {
+        contadorTolva++;
+        const tbody = document.getElementById("tablaTolvasBody");
+        const row = document.createElement("tr");
+        
+        row.innerHTML = `
+            <td>${contadorTolva}</td>
+            <td>
+                <select name="tolva_turno_${contadorTolva}">
+                    <option value="DÍA">DÍA</option>
+                    <option value="NOCHE">NOCHE</option>
+                </select>
+            </td>
+            <td><input type="text" name="tolva_horario_${contadorTolva}" placeholder="Ej: 11:20-12:10"></td>
+            <td><input type="number" step="0.01" name="tolva_duracion_${contadorTolva}" placeholder="0.83"></td>
+            <td><input type="text" name="tolva_frente_${contadorTolva}" value="001-002"></td>
+            <td><input type="number" step="0.1" name="tolva_tn_${contadorTolva}" placeholder="2.0"></td>
+        `;
+        tbody.appendChild(row);
+    }
+
+    // Procesar imágenes cargadas y añadir cuadro para el pie de foto
+    function procesarFotos(input) {
+        const contenedor = document.getElementById("contenedorFotos");
+        contenedor.innerHTML = "";
+
+        if (input.files) {
+            Array.from(input.files).forEach((file, idx) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const item = document.createElement("div");
+                    item.className = "photo-item";
+                    item.innerHTML = `
+                        <img src="${e.target.result}" alt="Evidencia ${idx + 1}">
+                        <div style="flex-grow: 1;">
+                            <label>Pie de foto / Descripción para el reporte:</label>
+                            <input type="text" name="descripcion_foto_${idx}" placeholder="Ej: Sistemas auxiliares de lubricación en operación." required>
+                        </div>
+                    `;
+                    contenedor.appendChild(item);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+    }
+
+    // Inicializar la interfaz al cargar
+    window.onload = function() {
+        renderizarTabla24Horas();
+        // Agregar 2 filas iniciales de tolva por defecto
+        agregarFilaTolva();
+        agregarFilaTolva();
+    };
+
+    // Evento de envío del formulario
+    document.getElementById("colectorForm").addEventListener("submit", function(e) {
+        e.preventDefault();
+        alert("✅ Datos y fotos de guardia registrados localmente con éxito. Los parámetros de 24 horas están listos para alimentar los gráficos de descarga y tendencias.");
+    });
+</script>
+
+</body>
+</html>
