@@ -10,19 +10,19 @@ let payloadPreparado = null;
 
 // Ciclo operativo cada 2 horas (12 intervalos continuos en 24 horas)
 const cicloOperativo = [
-    { hora: "07:00", turno: "DIA" },
     { hora: "09:00", turno: "DIA" },
     { hora: "11:00", turno: "DIA" },
     { hora: "13:00", turno: "DIA" },
     { hora: "15:00", turno: "DIA" },
     { hora: "17:00", turno: "DIA" },
-    { hora: "19:00", turno: "NOCHE" },
+    { hora: "19:00", turno: "DIA" },
     { hora: "21:00", turno: "NOCHE" },
     { hora: "23:00", turno: "NOCHE" },
     { hora: "01:00", turno: "NOCHE" },
     { hora: "03:00", turno: "NOCHE" },
-    { hora: "05:00", turno: "NOCHE" }
-];
+    { hora: "05:00", turno: "NOCHE" },
+    { hora: "07:00", turno: "NOCHE" }
+]
 
 let contadorTolva = 0;
 
