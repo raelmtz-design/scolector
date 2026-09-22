@@ -6,7 +6,6 @@ const CREDENCIALES = {
     passValida: "shougang2026"
 };
 
-// Variable global para almacenar el payload preparado
 let payloadPreparado = null;
 
 // Ciclo operativo cada 2 horas (12 intervalos continuos en 24 horas)
@@ -59,7 +58,6 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
     }
 });
 
-// Función para activar la interfaz principal
 function iniciarSesionCorrecta(usuario) {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('appContent').style.display = 'block';
@@ -71,13 +69,12 @@ function iniciarSesionCorrecta(usuario) {
     }
 }
 
-// Función para cerrar sesión
 function cerrarSesion() {
     localStorage.removeItem('colector_usuario');
     location.reload();
 }
 
-// Renderizar tabla con intervalos de 2 horas (sin valores por defecto)
+// Renderizar filas de la Sección 4 alineadas a los nuevos encabezados
 function renderizarTabla24Horas() {
     const tbody = document.getElementById("tablaHorasBody");
     tbody.innerHTML = "";
@@ -89,21 +86,31 @@ function renderizarTabla24Horas() {
         row.innerHTML = `
             <td><strong>${item.hora}</strong></td>
             <td><span class="badge-turno ${badgeClass}">${item.turno}</span></td>
-            <td><input type="number" step="0.1" name="comp_${index}" placeholder="Ej: 60"></td>
+            
+            <!-- Presión del Sistema (5 columnas) -->
+            <td><input type="number" step="0.1" name="pres_ingreso_${index}" placeholder="Ej: 85"></td>
+            <td><input type="number" step="0.1" name="pres_salida_${index}" placeholder="Ej: 75"></td>
+            <td><input type="number" step="0.1" name="pres_dif_${index}" placeholder="Ej: 10"></td>
+            <td><input type="number" step="1" name="pres_aire_${index}" placeholder="Ej: 80"></td>
+            <td><input type="number" step="0.01" name="pres_lub_${index}" placeholder="Ej: 0.20"></td>
+            
+            <!-- Temperatura Chumacera : Motor (4 columnas) -->
+            <td><input type="number" step="1" name="temp_chum_libre_${index}" placeholder="Ej: 40"></td>
+            <td><input type="number" step="1" name="temp_chum_mot_${index}" placeholder="Ej: 42"></td>
+            <td><input type="number" step="1" name="temp_mot_vent_${index}" placeholder="Ej: 48"></td>
+            <td><input type="number" step="1" name="temp_mot_acop_${index}" placeholder="Ej: 45"></td>
+            
+            <!-- Vibraciones (mm/s) (2 columnas) -->
+            <td><input type="number" step="0.1" name="vib_libre_${index}" placeholder="Ej: 1.1"></td>
             <td><input type="number" step="0.1" name="vib_mot_${index}" placeholder="Ej: 1.2"></td>
-            <td><input type="number" step="0.1" name="vib_lib_${index}" placeholder="Ej: 1.1"></td>
-            <td><input type="number" step="1" name="mot_acop_${index}" placeholder="Ej: 45"></td>
-            <td><input type="number" step="1" name="mot_vent_${index}" placeholder="Ej: 48"></td>
-            <td><input type="number" step="1" name="chum_mot_${index}" placeholder="Ej: 42"></td>
-            <td><input type="number" step="1" name="chum_lib_${index}" placeholder="Ej: 40"></td>
-            <td><input type="number" step="0.01" name="lub_${index}" placeholder="Ej: 0.20"></td>
-            <td><input type="number" step="1" name="aire_${index}" placeholder="Ej: 85"></td>
+            
+            <!-- Compuerta (1 columna) -->
+            <td><input type="number" step="0.1" name="comp_${index}" placeholder="Ej: 60"></td>
         `;
         tbody.appendChild(row);
     });
 }
 
-// Agregar filas a la tabla de Descarga de Tolvas (Sección 3)
 function agregarFilaTolva() {
     contadorTolva++;
     const tbody = document.getElementById("tablaTolvasBody");
@@ -125,7 +132,6 @@ function agregarFilaTolva() {
     tbody.appendChild(row);
 }
 
-// Procesar imágenes cargadas y añadir cuadro para el pie de foto
 function procesarFotos(input) {
     const contenedor = document.getElementById("contenedorFotos");
     contenedor.innerHTML = "";
@@ -150,7 +156,6 @@ function procesarFotos(input) {
     }
 }
 
-// Evento Submit del Formulario
 document.getElementById("colectorForm").addEventListener("submit", function(e) {
     e.preventDefault();
     
@@ -164,7 +169,6 @@ document.getElementById("colectorForm").addEventListener("submit", function(e) {
     }
 });
 
-// Detectar campos vacíos según el turno
 function detectarCamposVacios(data) {
     let vacios = [];
 
@@ -177,7 +181,7 @@ function detectarCamposVacios(data) {
     const turnoActual = data.turno;
     data.monitoreo24H.forEach(item => {
         if (item.turno === turnoActual) {
-            if (!item.vibMotriz || !item.vibLibre || !item.lubricacion) {
+            if (!item.presIngreso || !item.tempChumMot || !item.vibMot) {
                 vacios.push(`Sección 4: Lectura incompleta a las ${item.hora} (Guardia ${item.turno})`);
             }
         }
@@ -200,7 +204,6 @@ function cerrarModalValidacion() {
     document.getElementById("modalCamposVacios").style.display = "none";
 }
 
-// Envío final a Google Apps Script
 async function enviarFormularioFinal() {
     cerrarModalValidacion();
 
@@ -228,7 +231,6 @@ async function enviarFormularioFinal() {
     }
 }
 
-// Construir el objeto de datos
 function prepararPayload() {
     const payload = {
         fecha: document.getElementById("fecha").value,
@@ -276,15 +278,18 @@ function prepararPayload() {
         payload.monitoreo24H.push({
             hora: item.hora,
             turno: item.turno,
-            compuerta: document.querySelector(`[name="comp_${index}"]`).value,
-            vibMotriz: document.querySelector(`[name="vib_mot_${index}"]`).value,
-            vibLibre: document.querySelector(`[name="vib_lib_${index}"]`).value,
-            motAcople: document.querySelector(`[name="mot_acop_${index}"]`).value,
-            motVentilador: document.querySelector(`[name="mot_vent_${index}"]`).value,
-            chumMotriz: document.querySelector(`[name="chum_mot_${index}"]`).value,
-            chumLibre: document.querySelector(`[name="chum_lib_${index}"]`).value,
-            lubricacion: document.querySelector(`[name="lub_${index}"]`).value,
-            aireComprimido: document.querySelector(`[name="aire_${index}"]`).value
+            presIngreso: document.querySelector(`[name="pres_ingreso_${index}"]`).value,
+            presSalida: document.querySelector(`[name="pres_salida_${index}"]`).value,
+            presDiferencia: document.querySelector(`[name="pres_dif_${index}"]`).value,
+            presAire: document.querySelector(`[name="pres_aire_${index}"]`).value,
+            presLubricacion: document.querySelector(`[name="pres_lub_${index}"]`).value,
+            tempChumLibre: document.querySelector(`[name="temp_chum_libre_${index}"]`).value,
+            tempChumMot: document.querySelector(`[name="temp_chum_mot_${index}"]`).value,
+            tempMotVent: document.querySelector(`[name="temp_mot_vent_${index}"]`).value,
+            tempMotAcop: document.querySelector(`[name="temp_mot_acop_${index}"]`).value,
+            vibLibre: document.querySelector(`[name="vib_libre_${index}"]`).value,
+            vibMot: document.querySelector(`[name="vib_mot_${index}"]`).value,
+            compuerta: document.querySelector(`[name="comp_${index}"]`).value
         });
     });
 
