@@ -43,6 +43,10 @@ h2, h3 {
 
 @media (max-width: 600px) {
     .grid-2 { grid-template-columns: 1fr; }
+    
+    .container {
+        padding: 15px;
+    }
 }
 
 label {
@@ -61,9 +65,11 @@ input, select, textarea {
     margin-bottom: 10px;
 }
 
+/* Tablas con desplazamiento horizontal táctil suave */
 .table-responsive {
     overflow-x: auto;
     margin-top: 10px;
+    -webkit-overflow-scrolling: touch;
 }
 
 table {
@@ -75,8 +81,9 @@ table {
 
 th, td {
     border: 1px solid var(--border);
-    padding: 6px;
+    padding: 6px 4px;
     text-align: center;
+    white-space: nowrap;
 }
 
 th {
@@ -87,9 +94,14 @@ th {
 
 table input, table select {
     margin-bottom: 0;
-    padding: 4px;
-    font-size: 0.95em;
+    padding: 4px 2px;
+    font-size: 0.9em;
     text-align: center;
+}
+
+/* Ajuste específico para números con 3 decimales en celdas */
+table input[type="number"] {
+    min-width: 62px;
 }
 
 /* Formato para lista de fotos con pie de foto */
@@ -102,6 +114,13 @@ table input, table select {
     padding: 10px;
     border: 1px solid var(--border);
     border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+    .photo-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
 .photo-item img {
@@ -143,7 +162,7 @@ table input, table select {
 .bg-dia { background-color: #f39c12; }
 .bg-noche { background-color: #2c3e50; }
 
-/* ESTILOS PARA LA PANTALLA DE LOGIN */
+/* Pantalla sobrepuesta de Login */
 .login-overlay {
     position: fixed;
     top: 0;
@@ -207,7 +226,7 @@ table input, table select {
     font-size: 0.85em;
 }
 
-/* MODAL DE VALIDACIÓN DE CAMPOS VACÍOS */
+/* Modal de campos incompletos */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -231,7 +250,7 @@ table input, table select {
 }
 
 .modal-content h3 {
-    color: #e67e22; /* Naranja de advertencia */
+    color: #e67e22;
     margin-top: 0;
 }
 
