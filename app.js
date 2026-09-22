@@ -22,7 +22,7 @@ const cicloOperativo = [
     { hora: "03:00", turno: "NOCHE" },
     { hora: "05:00", turno: "NOCHE" },
     { hora: "07:00", turno: "NOCHE" }
-]
+];
 
 let contadorTolva = 0;
 
