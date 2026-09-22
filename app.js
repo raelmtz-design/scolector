@@ -8,7 +8,7 @@ const CREDENCIALES = {
 
 let payloadPreparado = null;
 
-// Ciclo operativo cada 2 horas (12 intervalos continuos en 24 horas)
+// Ciclo operativo bihorario corregido (09:00 a 07:00 [+1 día])
 const cicloOperativo = [
     { hora: "09:00", turno: "DIA" },
     { hora: "11:00", turno: "DIA" },
@@ -74,7 +74,7 @@ function cerrarSesion() {
     location.reload();
 }
 
-// Renderizar filas de la Sección 4 alineadas a los nuevos encabezados
+// Renderizar filas de la Sección 4 alineadas a los nuevos encabezados y con step 0.001 (hasta 3 decimales)
 function renderizarTabla24Horas() {
     const tbody = document.getElementById("tablaHorasBody");
     tbody.innerHTML = "";
@@ -88,24 +88,24 @@ function renderizarTabla24Horas() {
             <td><span class="badge-turno ${badgeClass}">${item.turno}</span></td>
             
             <!-- Presión del Sistema (5 columnas) -->
-            <td><input type="number" step="0.1" name="pres_ingreso_${index}" placeholder="Ej: 85"></td>
-            <td><input type="number" step="0.1" name="pres_salida_${index}" placeholder="Ej: 75"></td>
-            <td><input type="number" step="0.1" name="pres_dif_${index}" placeholder="Ej: 10"></td>
-            <td><input type="number" step="1" name="pres_aire_${index}" placeholder="Ej: 80"></td>
-            <td><input type="number" step="0.01" name="pres_lub_${index}" placeholder="Ej: 0.20"></td>
+            <td><input type="number" step="0.001" name="pres_ingreso_${index}" placeholder="Ej: 85.000"></td>
+            <td><input type="number" step="0.001" name="pres_salida_${index}" placeholder="Ej: 75.000"></td>
+            <td><input type="number" step="0.001" name="pres_dif_${index}" placeholder="Ej: 10.000"></td>
+            <td><input type="number" step="0.001" name="pres_aire_${index}" placeholder="Ej: 80.000"></td>
+            <td><input type="number" step="0.001" name="pres_lub_${index}" placeholder="Ej: 0.205"></td>
             
             <!-- Temperatura Chumacera : Motor (4 columnas) -->
-            <td><input type="number" step="1" name="temp_chum_libre_${index}" placeholder="Ej: 40"></td>
-            <td><input type="number" step="1" name="temp_chum_mot_${index}" placeholder="Ej: 42"></td>
-            <td><input type="number" step="1" name="temp_mot_vent_${index}" placeholder="Ej: 48"></td>
-            <td><input type="number" step="1" name="temp_mot_acop_${index}" placeholder="Ej: 45"></td>
+            <td><input type="number" step="0.1" name="temp_chum_libre_${index}" placeholder="Ej: 40.5"></td>
+            <td><input type="number" step="0.1" name="temp_chum_mot_${index}" placeholder="Ej: 42.0"></td>
+            <td><input type="number" step="0.1" name="temp_mot_vent_${index}" placeholder="Ej: 48.2"></td>
+            <td><input type="number" step="0.1" name="temp_mot_acop_${index}" placeholder="Ej: 45.1"></td>
             
             <!-- Vibraciones (mm/s) (2 columnas) -->
-            <td><input type="number" step="0.1" name="vib_libre_${index}" placeholder="Ej: 1.1"></td>
-            <td><input type="number" step="0.1" name="vib_mot_${index}" placeholder="Ej: 1.2"></td>
+            <td><input type="number" step="0.001" name="vib_libre_${index}" placeholder="Ej: 1.125"></td>
+            <td><input type="number" step="0.001" name="vib_mot_${index}" placeholder="Ej: 1.250"></td>
             
             <!-- Compuerta (1 columna) -->
-            <td><input type="number" step="0.1" name="comp_${index}" placeholder="Ej: 60"></td>
+            <td><input type="number" step="0.1" name="comp_${index}" placeholder="Ej: 60.0"></td>
         `;
         tbody.appendChild(row);
     });
