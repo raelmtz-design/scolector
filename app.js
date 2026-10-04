@@ -129,36 +129,43 @@ function agregarFilaTolva() {
         <td><input type="text" name="tolva_frente_${contadorTolva}" placeholder="Ej: 001-002"></td>
         <td><input type="number" step="0.1" name="tolva_tn_${contadorTolva}" placeholder="Ej: 2.0"></td>
     `;
+    row.querySelector("select").value = document.getElementById("turno").value === "NOCHE" ? "NOCHE" : "DÍA";
     tbody.appendChild(row);
 }
 
+let fotosPendientes = 0;
+let enviandoGuardia = false;
+let siguienteFoto = 0;
+
 function procesarFotos(input) {
     const contenedor = document.getElementById("contenedorFotos");
-    contenedor.innerHTML = "";
-
-    if (input.files) {
-        Array.from(input.files).forEach((file, idx) => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const item = document.createElement("div");
-                item.className = "photo-item";
-                item.innerHTML = `
-                    <img src="${e.target.result}" alt="Evidencia ${idx + 1}">
-                    <div style="flex-grow: 1;">
-                        <label>Pie de foto / Descripción para el reporte:</label>
-                        <input type="text" name="descripcion_foto_${idx}" placeholder="Ej: Sistemas auxiliares de lubricación en operación." required>
-                    </div>
-                `;
-                contenedor.appendChild(item);
-            };
-            reader.readAsDataURL(file);
-        });
-    }
+    Array.from(input.files || []).forEach(file => {
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+            alert("Use imágenes JPG, PNG o WebP: " + file.name);
+            return;
+        }
+        const item = document.createElement("div");
+        item.className = "photo-item";
+        item.dataset.tipo = file.type;
+        const indice = siguienteFoto++;
+        item.innerHTML = '<img alt="Evidencia"><div style="flex-grow:1"><label>Pie de foto / Descripción para el reporte:</label><input type="text" name="descripcion_foto_' + indice + '" required placeholder="Describa la actividad"><button type="button">Quitar foto</button></div>';
+        item.querySelector("button").addEventListener("click", () => item.remove());
+        contenedor.appendChild(item);
+        fotosPendientes++;
+        const reader = new FileReader();
+        reader.onload = () => { item.querySelector("img").src = reader.result; };
+        reader.onerror = () => { item.remove(); alert("No se pudo leer la foto: " + file.name); };
+        reader.onloadend = () => { fotosPendientes--; };
+        reader.readAsDataURL(file);
+    });
+    input.value = "";
 }
 
 document.getElementById("colectorForm").addEventListener("submit", function(e) {
     e.preventDefault();
     
+    if (enviandoGuardia) return;
+    if (fotosPendientes) { alert("Espere a que terminen de cargar las fotos."); return; }
     payloadPreparado = prepararPayload();
     const camposVacios = detectarCamposVacios(payloadPreparado);
 
@@ -205,28 +212,37 @@ function cerrarModalValidacion() {
 }
 
 async function enviarFormularioFinal() {
+    if (enviandoGuardia || !payloadPreparado) return;
     cerrarModalValidacion();
-
-    const btnSubmit = document.querySelector(".btn-submit");
-    btnSubmit.disabled = true;
-    btnSubmit.innerText = "⏳ Guardando y subiendo imágenes a Drive...";
-
+    if (fotosPendientes) { alert("Espere a que terminen de cargar las fotos."); return; }
+    enviandoGuardia = true;
+    const controles = Array.from(document.querySelectorAll("#colectorForm input, #colectorForm select, #colectorForm textarea, #colectorForm button, .btn-warning-submit, .btn-logout"));
+    const estados = controles.map(control => control.disabled);
+    controles.forEach(control => { control.disabled = true; });
+    const btnSubmit = document.querySelector("#colectorForm .btn-submit");
+    btnSubmit.innerText = "Guardando y verificando...";
     try {
         const response = await fetch(URL_API_GOOGLESHEETS, {
             method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "application/json" },
+            redirect: "follow",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
             body: JSON.stringify(payloadPreparado)
         });
-
-        alert("✅ Datos de guardia registrados correctamente en Google Sheets y Drive.");
-        location.reload();
-
+        if (!response.ok) throw new Error("Respuesta del servidor: " + response.status);
+        const resultado = await response.json();
+        if (resultado.status !== "success" || resultado.id !== payloadPreparado.fecha) {
+            throw new Error(resultado.message || "El servidor no confirmó el registro.");
+        }
+        document.getElementById("contenedorFotos").innerHTML = "";
+        document.getElementById("fotosInput").value = "";
+        alert("Guardado confirmado. Las fotos se guardaron y los campos permanecen disponibles para continuar registrando este turno.");
+        payloadPreparado = null;
     } catch (err) {
         console.error(err);
-        alert("❌ Ocurrió un error al intentar guardar la información.");
+        alert("No se pudo confirmar el guardado: " + err.message + ". Los datos y fotos permanecen en pantalla. Puede reintentar; un envío idéntico no se registra dos veces.");
     } finally {
-        btnSubmit.disabled = false;
+        controles.forEach((control, index) => { control.disabled = estados[index]; });
+        enviandoGuardia = false;
         btnSubmit.innerText = "GUARDAR Y REVISAR DATOS DE GUARDIA";
     }
 }
@@ -296,15 +312,50 @@ function prepararPayload() {
     const contenedorFotos = document.querySelectorAll("#contenedorFotos .photo-item");
     contenedorFotos.forEach((item, idx) => {
         const img = item.querySelector("img");
-        const descInput = item.querySelector(`[name="descripcion_foto_${idx}"]`);
+        const descInput = item.querySelector("input[type=text]");
         if (img) {
             payload.fotos.push({
                 base64: img.src,
-                type: "image/jpeg",
+                type: item.dataset.tipo || "image/jpeg",
                 descripcion: descInput ? descInput.value : "Sin descripción"
             });
         }
     });
 
+    payload.monitoreo24H = payload.monitoreo24H.filter(item => item.turno === payload.turno);
     return payload;
 }
+// Los campos del otro turno se conservan en pantalla, pero no se envian ni validan.
+function actualizarTurnoVisible() {
+    const turno = document.getElementById("turno").value;
+    document.querySelectorAll("#tablaHorasBody tr").forEach((fila, i) => {
+        const otroTurno = cicloOperativo[i].turno !== turno;
+        fila.querySelectorAll("input").forEach(input => { input.disabled = otroTurno; });
+        fila.style.opacity = otroTurno ? "0.45" : "1";
+    });
+    document.querySelectorAll("#tablaTolvasBody tr").forEach(fila => {
+        if (!fila.querySelector('input[name^="tolva_horario_"]').value) fila.querySelector("select").value = turno === "NOCHE" ? "NOCHE" : "DÍA";
+    });
+}
+document.getElementById("turno").addEventListener("change", actualizarTurnoVisible);
+window.addEventListener("DOMContentLoaded", actualizarTurnoVisible);
+
+window.addEventListener("DOMContentLoaded", () => {
+    const boton = document.createElement("button");
+    boton.type = "button";
+    boton.className = "btn-secondary";
+    boton.textContent = "Comprobar conexión";
+    boton.addEventListener("click", async () => {
+        boton.disabled = true;
+        try {
+            const response = await fetch(URL_API_GOOGLESHEETS, { method: "POST", headers: {"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({accion:"comprobar"}) });
+            if (!response.ok) throw new Error("El servidor no respondió correctamente.");
+            const result = await response.json();
+            if (result.status !== "success" || result.version !== 3) throw new Error("El servicio necesita actualizarse.");
+            alert("Conexión verificada. El servicio está disponible. No se modificaron registros.");
+        } catch (error) {
+            alert("No se pudo verificar la conexión: " + error.message);
+        } finally { boton.disabled = false; }
+    });
+    document.querySelector(".header-user").appendChild(boton);
+});
