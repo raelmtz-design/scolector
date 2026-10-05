@@ -1,10 +1,7 @@
 // URL DE TU WEB APP DE GOOGLE APPS SCRIPT
 const URL_API_GOOGLESHEETS = "https://script.google.com/macros/s/AKfycbw8X1UsQXLOpdmC2k5SaHjQGRRwzL8I-OViSVJ9IDuGjtqoOf_3t-b_6wNnDJkMt3d1/exec";
 
-// CONFIGURACIÓN DE CREDENCIALES
-const CREDENCIALES = {
-    passValida: "shougang2026"
-};
+// El acceso se valida en Apps Script; no hay contraseñas en el código público.
 
 let payloadPreparado = null;
 
@@ -28,9 +25,9 @@ let contadorTolva = 0;
 
 // Verificar estado de sesión al cargar la página
 window.addEventListener('DOMContentLoaded', () => {
-    const usuarioGuardado = localStorage.getItem('colector_usuario');
+    const usuarioGuardado = sessionStorage.getItem('colector_usuario');
     
-    if (usuarioGuardado) {
+    if (usuarioGuardado && sessionStorage.getItem("colector_token")) {
         iniciarSesionCorrecta(usuarioGuardado);
     } else {
         document.getElementById('loginOverlay').style.display = 'flex';
@@ -43,18 +40,24 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Manejo del formulario de Login
-document.getElementById('loginForm').addEventListener('submit', function(e) {
+document.getElementById('loginForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const usuario = document.getElementById('loginUser').value;
-    const pass = document.getElementById('loginPass').value;
+    const boton = this.querySelector('button');
+    boton.disabled = true;
     const errorMsg = document.getElementById('errorMsg');
-
-    if (pass === CREDENCIALES.passValida) {
+    try {
+        const resultado = await solicitarAPI({accion:'login', usuario:document.getElementById('loginUser').value, clave:document.getElementById('loginPass').value}, false);
+        sessionStorage.setItem('colector_token', resultado.token);
+        sessionStorage.setItem('colector_usuario', resultado.usuario);
+        localStorage.removeItem('colector_usuario');
         errorMsg.style.display = 'none';
-        localStorage.setItem('colector_usuario', usuario);
-        iniciarSesionCorrecta(usuario);
-    } else {
+        iniciarSesionCorrecta(resultado.usuario);
+    } catch(error) {
+        errorMsg.textContent = error.message;
         errorMsg.style.display = 'block';
+    } finally {
+        document.getElementById('loginPass').value = '';
+        boton.disabled = false;
     }
 });
 
@@ -70,7 +73,11 @@ function iniciarSesionCorrecta(usuario) {
 }
 
 function cerrarSesion() {
+    if (hayCambios && !confirm('Hay cambios sin guardar. ¿Desea cerrar sesión?')) return;
+    sessionStorage.removeItem('colector_token');
+    sessionStorage.removeItem('colector_usuario');
     localStorage.removeItem('colector_usuario');
+    hayCambios = false;
     location.reload();
 }
 
@@ -129,6 +136,8 @@ function agregarFilaTolva() {
         <td><input type="text" name="tolva_frente_${contadorTolva}" placeholder="Ej: 001-002"></td>
         <td><input type="number" step="0.1" name="tolva_tn_${contadorTolva}" placeholder="Ej: 2.0"></td>
     `;
+    row.dataset.id = crypto.randomUUID();
+    row.querySelector("select").disabled = true;
     row.querySelector("select").value = document.getElementById("turno").value === "NOCHE" ? "NOCHE" : "DÍA";
     tbody.appendChild(row);
 }
@@ -149,9 +158,10 @@ function procesarFotos(input) {
         item.dataset.tipo = file.type;
         const indice = siguienteFoto++;
         item.innerHTML = '<img alt="Evidencia"><div style="flex-grow:1"><label>Pie de foto / Descripción para el reporte:</label><input type="text" name="descripcion_foto_' + indice + '" required placeholder="Describa la actividad"><button type="button">Quitar foto</button></div>';
-        item.querySelector("button").addEventListener("click", () => item.remove());
+        item.querySelector("button").addEventListener("click", () => { item.remove(); hayCambios = true; });
         contenedor.appendChild(item);
         fotosPendientes++;
+        hayCambios = true;
         const reader = new FileReader();
         reader.onload = () => { item.querySelector("img").src = reader.result; };
         reader.onerror = () => { item.remove(); alert("No se pudo leer la foto: " + file.name); };
@@ -166,7 +176,8 @@ document.getElementById("colectorForm").addEventListener("submit", function(e) {
     
     if (enviandoGuardia) return;
     if (fotosPendientes) { alert("Espere a que terminen de cargar las fotos."); return; }
-    payloadPreparado = prepararPayload();
+    if (!guardiaCargada) { alert("Primero cargue la fecha y el turno que desea registrar."); return; }
+    try { payloadPreparado = prepararPayload(); } catch (error) { alert(error.message); return; }
     const camposVacios = detectarCamposVacios(payloadPreparado);
 
     if (camposVacios.length > 0) {
@@ -194,7 +205,7 @@ function detectarCamposVacios(data) {
         }
     });
 
-    if (data.fotos.length === 0) {
+    if (data.fotos.length === 0 && (!data.fotosExistentes || data.fotosExistentes.length === 0)) {
         vacios.push("Sección 5: No se adjuntó evidencia fotográfica");
     }
 
@@ -212,43 +223,45 @@ function cerrarModalValidacion() {
 }
 
 async function enviarFormularioFinal() {
-    if (enviandoGuardia || !payloadPreparado) return;
+    if (enviandoGuardia || !payloadPreparado || !guardiaCargada) return;
     cerrarModalValidacion();
     if (fotosPendientes) { alert("Espere a que terminen de cargar las fotos."); return; }
     enviandoGuardia = true;
-    const controles = Array.from(document.querySelectorAll("#colectorForm input, #colectorForm select, #colectorForm textarea, #colectorForm button, .btn-warning-submit, .btn-logout"));
-    const estados = controles.map(control => control.disabled);
-    controles.forEach(control => { control.disabled = true; });
-    const btnSubmit = document.querySelector("#colectorForm .btn-submit");
-    btnSubmit.innerText = "Guardando y verificando...";
+    bloquearFormulario(true);
+    const boton = document.querySelector("#colectorForm .btn-submit");
+    boton.innerText = "Guardando y verificando...";
     try {
-        const response = await fetch(URL_API_GOOGLESHEETS, {
-            method: "POST",
-            redirect: "follow",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify(payloadPreparado)
-        });
-        if (!response.ok) throw new Error("Respuesta del servidor: " + response.status);
-        const resultado = await response.json();
-        if (resultado.status !== "success" || resultado.id !== payloadPreparado.fecha) {
-            throw new Error(resultado.message || "El servidor no confirmó el registro.");
-        }
-        document.getElementById("contenedorFotos").innerHTML = "";
+        const resultado = await solicitarAPI(payloadPreparado);
+        if (resultado.id !== guardiaCargada.fecha || !resultado.revision) throw new Error("Respuesta de guardado incompleta.");
+        guardiaCargada.revision = resultado.revision;
+        hayCambios = false;
+        document.querySelectorAll("#contenedorFotos .photo-item").forEach(item => item.remove());
         document.getElementById("fotosInput").value = "";
-        alert("Guardado confirmado. Las fotos se guardaron y los campos permanecen disponibles para continuar registrando este turno.");
         payloadPreparado = null;
-    } catch (err) {
-        console.error(err);
-        alert("No se pudo confirmar el guardado: " + err.message + ". Los datos y fotos permanecen en pantalla. Puede reintentar; un envío idéntico no se registra dos veces.");
+        mostrarEstado("Guardado confirmado.");
+        try {
+            const consulta = await solicitarAPI({accion:"consultar",fecha:guardiaCargada.fecha,turno:guardiaCargada.turno});
+            aplicarGuardia(consulta.registro);
+            mostrarEstado("Guardado confirmado. Puede continuar registrando este turno.");
+        } catch(error) {
+            mostrarEstado("Guardado confirmado, pero no se pudo actualizar la vista. Vuelva a cargar la guardia antes de seguir.");
+            guardiaCargada = null;
+        }
+    } catch(error) {
+        mostrarEstado(error.message);
+        alert("No se confirmó este guardado: " + error.message + " Sus cambios permanecen en pantalla.");
     } finally {
-        controles.forEach((control, index) => { control.disabled = estados[index]; });
         enviandoGuardia = false;
-        btnSubmit.innerText = "GUARDAR Y REVISAR DATOS DE GUARDIA";
+        bloquearFormulario(false);
+        boton.innerText = "GUARDAR Y REVISAR DATOS DE GUARDIA";
     }
 }
 
 function prepararPayload() {
+    if (!guardiaCargada || guardiaCargada.fecha !== document.getElementById("fecha").value || guardiaCargada.turno !== document.getElementById("turno").value) throw new Error("Cargue la guardia seleccionada antes de guardar.");
     const payload = {
+        accion: "guardar",
+        baseRevision: guardiaCargada.revision,
         fecha: document.getElementById("fecha").value,
         turno: document.getElementById("turno").value,
         inspector: document.getElementById("inspector").value,
@@ -278,8 +291,10 @@ function prepararPayload() {
     filasTolva.forEach((row, idx) => {
         const num = idx + 1;
         const horario = row.querySelector(`[name="tolva_horario_${num}"]`)?.value;
+        if (!horario && row.dataset.guardada === "1") throw new Error("Una descarga guardada necesita su horario. Corríjalo sin dejarlo vacío.");
         if (horario) {
             payload.tolvas.push({
+                id: row.dataset.id,
                 num: num,
                 turno: row.querySelector(`[name="tolva_turno_${num}"]`).value,
                 horario: horario,
@@ -323,6 +338,7 @@ function prepararPayload() {
     });
 
     payload.monitoreo24H = payload.monitoreo24H.filter(item => item.turno === payload.turno);
+    payload.fotosExistentes = Array.from(document.querySelectorAll(".photo-guardada")).map(item => ({id:item.dataset.id,descripcion:item.querySelector("input").value}));
     return payload;
 }
 // Los campos del otro turno se conservan en pantalla, pero no se envian ni validan.
@@ -340,22 +356,121 @@ function actualizarTurnoVisible() {
 document.getElementById("turno").addEventListener("change", actualizarTurnoVisible);
 window.addEventListener("DOMContentLoaded", actualizarTurnoVisible);
 
-window.addEventListener("DOMContentLoaded", () => {
-    const boton = document.createElement("button");
-    boton.type = "button";
-    boton.className = "btn-secondary";
-    boton.textContent = "Comprobar conexión";
-    boton.addEventListener("click", async () => {
-        boton.disabled = true;
-        try {
-            const response = await fetch(URL_API_GOOGLESHEETS, { method: "POST", headers: {"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify({accion:"comprobar"}) });
-            if (!response.ok) throw new Error("El servidor no respondió correctamente.");
-            const result = await response.json();
-            if (result.status !== "success" || result.version !== 3) throw new Error("El servicio necesita actualizarse.");
-            alert("Conexión verificada. El servicio está disponible. No se modificaron registros.");
-        } catch (error) {
-            alert("No se pudo verificar la conexión: " + error.message);
-        } finally { boton.disabled = false; }
+
+let guardiaCargada = null;
+let hayCambios = false;
+let cargandoGuardia = false;
+const camposGenerales = {lubPresion:"lub_presion",lubTempTanque:"lub_temp_tanque",lubTempSalida:"lub_temp_salida",nivelAceiteMotriz:"nivel_acei_ladomotriz",nivelAceiteLibre:"nivel_acei_ladolibre",compuertaApertura:"compuerta_apertura",tanquePresion:"tanque_presion",sopEntrada:"sop_entrada",sopSalida:"sop_salida",sopTransmisor:"sop_transmisor",humNivel:"hum_nivel",tolvaMot01:"tolva_mot_01",tolvaMot02:"tolva_mot_02",tolvaMot03:"tolva_mot_03"};
+const camposLectura = {presIngreso:"pres_ingreso",presSalida:"pres_salida",presDiferencia:"pres_dif",presAire:"pres_aire",presLubricacion:"pres_lub",tempChumLibre:"temp_chum_libre",tempChumMot:"temp_chum_mot",tempMotVent:"temp_mot_vent",tempMotAcop:"temp_mot_acop",vibLibre:"vib_libre",vibMot:"vib_mot",compuerta:"comp"};
+async function solicitarAPI(datos, autenticar = true) {
+    const token = sessionStorage.getItem("colector_token");
+    if (autenticar && !token) throw new Error("Inicie sesión para continuar.");
+    const controlador = new AbortController();
+    const limite = setTimeout(() => controlador.abort(), 90000);
+    try {
+        const respuesta = await fetch(URL_API_GOOGLESHEETS, {method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(autenticar ? {...datos,token} : datos),signal:controlador.signal});
+        if (!respuesta.ok) throw new Error("El servicio no está disponible (" + respuesta.status + ").");
+        const resultado = await respuesta.json();
+        if (resultado.status !== "success") {
+            if (String(resultado.message).startsWith("SESION:")) {
+                sessionStorage.removeItem("colector_token");
+                document.getElementById("loginOverlay").style.display = "flex";
+                document.getElementById("appContent").style.display = "none";
+            }
+            throw new Error(resultado.message || "No se pudo completar la operación.");
+        }
+        return resultado;
+    } catch(error) {
+        if (error.name === "AbortError") throw new Error("La respuesta tardó demasiado. Puede reintentar sin duplicar el envío.");
+        throw error;
+    } finally { clearTimeout(limite); }
+}
+function mostrarEstado(texto) {
+    document.getElementById("estadoGuardia").textContent = texto;
+}
+function bloquearFormulario(ocupado) {
+    document.querySelectorAll("#colectorForm input, #colectorForm select, #colectorForm textarea, #colectorForm button").forEach(control => {
+        control.disabled = ocupado || (!guardiaCargada && !["fecha","turno","cargarGuardia"].includes(control.id));
     });
-    document.querySelector(".header-user").appendChild(boton);
+    document.querySelector(".btn-logout").disabled = ocupado;
+    document.querySelector(".btn-warning-submit").disabled = ocupado;
+    document.getElementById("inspector").readOnly = true;
+    if (!ocupado && guardiaCargada) actualizarTurnoVisible();
+    document.querySelectorAll("#tablaTolvasBody select").forEach(select => {select.disabled = true;});
+}
+function limpiarDatos() {
+    Object.values(camposGenerales).forEach(id => {document.getElementById(id).value = "";});
+    document.querySelectorAll("#tablaHorasBody input").forEach(input => {input.value = "";});
+    document.getElementById("tablaTolvasBody").innerHTML = "";
+    contadorTolva = 0;
+    agregarFilaTolva(); agregarFilaTolva();
+    document.getElementById("actividades").value = "";
+    document.getElementById("contenedorFotos").innerHTML = "";
+    document.getElementById("fotosInput").value = "";
+}
+function aplicarGuardia(registro) {
+    limpiarDatos();
+    guardiaCargada = {fecha:registro.fecha,turno:registro.turno,revision:registro.revision};
+    Object.entries(camposGenerales).forEach(([campo,id]) => {document.getElementById(id).value = registro.parametrosGenerales[campo] ?? "";});
+    (registro.monitoreo24H || []).forEach(lectura => {
+        const indice = cicloOperativo.findIndex(item => item.hora === lectura.hora);
+        if (indice < 0) return;
+        Object.entries(camposLectura).forEach(([campo,nombre]) => {document.querySelector('[name="' + nombre + '_' + indice + '"]').value = lectura[campo] ?? "";});
+    });
+    document.getElementById("tablaTolvasBody").innerHTML = ""; contadorTolva = 0;
+    (registro.tolvas || []).forEach(tolva => {
+        agregarFilaTolva();
+        const fila = document.querySelector("#tablaTolvasBody tr:last-child");
+        fila.dataset.id = tolva.id; fila.dataset.guardada = "1";
+        const campos = {horario:"horario",duracion:"duracion",frente:"frente",toneladas:"tn"};
+        Object.entries(campos).forEach(([campo,nombre]) => {fila.querySelector('[name="tolva_' + nombre + '_' + contadorTolva + '"]').value = tolva[campo] ?? "";});
+    });
+    if (!contadorTolva) {agregarFilaTolva();agregarFilaTolva();}
+    document.getElementById("actividades").value = registro.actividades || "";
+    (registro.fotos || []).forEach(foto => {
+        const item = document.createElement("div"); item.className = "photo-guardada"; item.dataset.id = foto.id;
+        item.style.cssText = "padding:10px;margin-bottom:10px;border:1px solid #ccc;background:white";
+        const enlace = document.createElement("a"); enlace.textContent = "Ver foto guardada en Drive"; enlace.target = "_blank"; enlace.rel = "noopener noreferrer";
+        enlace.href = "https://drive.google.com/file/d/" + encodeURIComponent(foto.id) + "/view";
+        const input = document.createElement("input"); input.type = "text"; input.required = true; input.value = foto.descripcion || ""; input.setAttribute("aria-label","Descripción de foto guardada");
+        item.append(enlace,input); document.getElementById("contenedorFotos").appendChild(item);
+    });
+    hayCambios = false; payloadPreparado = null;
+    mostrarEstado((registro.existe ? "Guardia cargada. " : "No hay registros para esta fecha. Puede iniciar el turno. ") + (registro.advertencias || []).join(" "));
+    bloquearFormulario(false);
+}
+async function cargarGuardia() {
+    if (cargandoGuardia || enviandoGuardia) return;
+    if (fotosPendientes) {alert("Espere a que terminen de cargar las fotos.");return;}
+    const fecha = document.getElementById("fecha").value;
+    const turno = document.getElementById("turno").value;
+    if (!fecha) {alert("Seleccione la fecha operativa.");return;}
+    if (hayCambios && !confirm("Hay cambios sin guardar. ¿Desea descartarlos y cargar la guardia guardada?")) return;
+    cargandoGuardia = true; bloquearFormulario(true); mostrarEstado("Cargando registros...");
+    try { const resultado = await solicitarAPI({accion:"consultar",fecha,turno}); aplicarGuardia(resultado.registro); }
+    catch(error) {mostrarEstado(error.message);}
+    finally {cargandoGuardia = false;bloquearFormulario(false);}
+}
+function cambiarContexto() {
+    if (guardiaCargada && (hayCambios || fotosPendientes) && !confirm("Hay cambios sin guardar. ¿Desea descartarlos para cambiar de fecha o turno?")) {
+        document.getElementById("fecha").value = guardiaCargada.fecha;
+        document.getElementById("turno").value = guardiaCargada.turno;
+        bloquearFormulario(false); return;
+    }
+    guardiaCargada = null; hayCambios = false; payloadPreparado = null; limpiarDatos();
+    mostrarEstado("Pulse Cargar guardia para recuperar o iniciar el turno seleccionado.");
+    bloquearFormulario(false);
+}
+window.addEventListener("DOMContentLoaded", () => {
+    localStorage.removeItem("colector_usuario");
+    const seccion = document.querySelector("#colectorForm .section");
+    const ayuda = document.createElement("p"); ayuda.textContent = "Use la fecha en que comenzó el día operativo. La madrugada del turno noche pertenece a esa misma fecha.";
+    const boton = document.createElement("button"); boton.type = "button"; boton.id = "cargarGuardia"; boton.className = "btn-secondary"; boton.textContent = "Cargar guardia"; boton.addEventListener("click", cargarGuardia);
+    const estado = document.createElement("p"); estado.id = "estadoGuardia"; estado.setAttribute("role","status"); estado.textContent = "Seleccione fecha y turno y pulse Cargar guardia.";
+    seccion.append(ayuda,boton,estado);
+    document.getElementById("fecha").addEventListener("change", cambiarContexto);
+    document.getElementById("turno").addEventListener("change", cambiarContexto);
+    document.getElementById("colectorForm").addEventListener("input", e => {if (guardiaCargada && !["fecha","turno"].includes(e.target.id)) hayCambios = true;});
+    bloquearFormulario(false);
 });
+window.addEventListener("beforeunload", e => {if (hayCambios) {e.preventDefault();e.returnValue = "";}});
