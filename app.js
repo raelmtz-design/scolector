@@ -72,8 +72,8 @@ function iniciarSesionCorrecta(usuario) {
     }
 }
 
-function cerrarSesion() {
-    if (hayCambios && !confirm('Hay cambios sin guardar. ¿Desea cerrar sesión?')) return;
+async function cerrarSesion() {
+    if (hayCambios && !await confirmarAccion('Hay cambios sin guardar. ¿Desea cerrar sesión?')) return;
     sessionStorage.removeItem('colector_token');
     sessionStorage.removeItem('colector_usuario');
     localStorage.removeItem('colector_usuario');
@@ -445,14 +445,14 @@ async function cargarGuardia() {
     const fecha = document.getElementById("fecha").value;
     const turno = document.getElementById("turno").value;
     if (!fecha) {alert("Seleccione la fecha operativa.");return;}
-    if (hayCambios && !confirm("Hay cambios sin guardar. ¿Desea descartarlos y cargar la guardia guardada?")) return;
+    if (hayCambios && !await confirmarAccion("Hay cambios sin guardar. ¿Desea descartarlos y cargar la guardia guardada?")) return;
     cargandoGuardia = true; bloquearFormulario(true); mostrarEstado("Cargando registros...");
     try { const resultado = await solicitarAPI({accion:"consultar",fecha,turno}); aplicarGuardia(resultado.registro); }
     catch(error) {mostrarEstado(error.message);}
     finally {cargandoGuardia = false;bloquearFormulario(false);}
 }
-function cambiarContexto() {
-    if (guardiaCargada && (hayCambios || fotosPendientes) && !confirm("Hay cambios sin guardar. ¿Desea descartarlos para cambiar de fecha o turno?")) {
+async function cambiarContexto() {
+    if (guardiaCargada && (hayCambios || fotosPendientes) && !await confirmarAccion("Hay cambios sin guardar. ¿Desea descartarlos para cambiar de fecha o turno?")) {
         document.getElementById("fecha").value = guardiaCargada.fecha;
         document.getElementById("turno").value = guardiaCargada.turno;
         bloquearFormulario(false); return;
@@ -546,3 +546,20 @@ window.addEventListener('DOMContentLoaded',()=>{
     document.getElementById('agregar_mantenimiento').addEventListener('click',()=>agregarMantenimiento());
     bloquearFormulario(false);
 });
+
+function confirmarAccion(mensaje) {
+    return new Promise(resolve=>{
+        const dialogo=document.createElement('dialog');
+        dialogo.setAttribute('aria-label','Cambios sin guardar');
+        dialogo.style.cssText='max-width:460px;width:calc(100% - 48px);padding:24px;border:0;border-radius:10px;box-shadow:0 12px 50px #0005';
+        const titulo=document.createElement('h3');titulo.textContent='Cambios sin guardar';
+        const texto=document.createElement('p');texto.textContent=mensaje;
+        const acciones=document.createElement('div');acciones.style.cssText='display:flex;flex-wrap:wrap;gap:12px;margin-top:20px';
+        const conservar=document.createElement('button');conservar.type='button';conservar.textContent='Conservar cambios';conservar.className='btn-secondary';
+        const descartar=document.createElement('button');descartar.type='button';descartar.textContent='Descartar y continuar';descartar.className='btn-secondary';
+        const terminar=valor=>{dialogo.close();dialogo.remove();resolve(valor);};
+        conservar.addEventListener('click',()=>terminar(false));descartar.addEventListener('click',()=>terminar(true));
+        dialogo.addEventListener('cancel',e=>{e.preventDefault();terminar(false);});
+        acciones.append(conservar,descartar);dialogo.append(titulo,texto,acciones);document.body.appendChild(dialogo);dialogo.showModal();conservar.focus();
+    });
+}
