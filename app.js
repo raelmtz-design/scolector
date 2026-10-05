@@ -474,3 +474,75 @@ window.addEventListener("DOMContentLoaded", () => {
     bloquearFormulario(false);
 });
 window.addEventListener("beforeunload", e => {if (hayCambios) {e.preventDefault();e.returnValue = "";}});
+
+// Datos adicionales necesarios para el informe semanal.
+const capturaInforme = {humNivelAceite:'hum_nivel_aceite',horasOperativas:'horas_operativas',motivoParada:'motivo_parada',estadoEquipos:'estado_equipos',pendientes:'pendientes_turno'};
+const prepararBase = prepararPayload;
+const aplicarBase = aplicarGuardia;
+const limpiarBase = limpiarDatos;
+const agregarTolvaBase = agregarFilaTolva;
+function calcularMinutosDescarga(horario) {
+    const partes = /^\s*(\d{1,2}):(\d{2})\s*[-–—]\s*(\d{1,2}):(\d{2})\s*$/.exec(horario);
+    if (!partes) throw new Error('Use el horario HH:MM-HH:MM en cada descarga.');
+    const h1=Number(partes[1]),m1=Number(partes[2]),h2=Number(partes[3]),m2=Number(partes[4]);
+    if(h1>23||h2>23||m1>59||m2>59) throw new Error('El horario de descarga no es válido.');
+    const minutos=(h2*60+m2-h1*60-m1+1440)%1440;
+    if(!minutos) throw new Error('Inicio y fin de descarga deben ser diferentes.');
+    return minutos;
+}
+agregarFilaTolva = function() {
+    agregarTolvaBase();
+    const fila=document.querySelector('#tablaTolvasBody tr:last-child');
+    const celda=document.createElement('td');
+    const agua=document.createElement('input'); agua.type='number';agua.min='0';agua.max='100';agua.step='0.1';agua.name='tolva_agua_'+contadorTolva;agua.setAttribute('aria-label','Apertura de agua de la descarga '+contadorTolva+' (%)');celda.appendChild(agua);fila.appendChild(celda);
+    const horario=fila.querySelector('[name^="tolva_horario_"]');
+    const duracion=fila.querySelector('[name^="tolva_duracion_"]');duracion.readOnly=true;duracion.title='Calculado desde el horario; los totales usan minutos exactos.';
+    horario.addEventListener('input',()=>{try {duracion.value=(calcularMinutosDescarga(horario.value)/60).toFixed(2);horario.setCustomValidity('');}catch(error){duracion.value='';horario.setCustomValidity(horario.value?error.message:'');}});
+};
+function agregarMantenimiento(registro={}) {
+    const fila=document.createElement('tr');
+    fila.innerHTML='<td><select aria-label="Tipo de cambio"><option value="">Seleccionar</option><option value="mangas">Mangas</option><option value="diafragmas">Diafragmas</option><option value="pistones">Pistones</option></select></td><td><input type="text" aria-label="Equipo o tolva" placeholder="Ej: T5"></td><td><select aria-label="Lado"><option value="">Seleccionar</option><option value="A">A</option><option value="B">B</option><option value="No aplica">No aplica</option></select></td><td><input type="number" min="1" step="1" aria-label="Cantidad"></td><td><button type="button">Quitar</button></td>';
+    const controles=fila.querySelectorAll('input,select');['tipo','equipo','lado','cantidad'].forEach((campo,i)=>{controles[i].value=registro[campo]??'';});
+    fila.querySelector('button').addEventListener('click',()=>{fila.remove();hayCambios=true;});
+    document.getElementById('mantenimientosBody').appendChild(fila);
+}
+limpiarDatos = function() {
+    limpiarBase();
+    Object.values(capturaInforme).forEach(id=>{document.getElementById(id).value='';});
+    document.getElementById('mantenimientosBody').innerHTML='';
+    document.getElementById('mantenimiento_revisado').checked=false;
+};
+aplicarGuardia = function(registro) {
+    aplicarBase(registro);
+    const parametros=registro.parametrosGenerales||{};
+    Object.entries(capturaInforme).forEach(([campo,id])=>{document.getElementById(id).value=parametros[campo]??'';});
+    (parametros.mantenimientos||[]).forEach(agregarMantenimiento);
+    document.getElementById('mantenimiento_revisado').checked=parametros.mantenimientoRevisado===true;
+    (registro.tolvas||[]).forEach((tolva,i)=>{const fila=document.querySelectorAll('#tablaTolvasBody tr')[i];fila.querySelector('[name^="tolva_agua_"]').value=tolva.aperturaAgua??'';try {fila.querySelector('[name^="tolva_duracion_"]').value=(calcularMinutosDescarga(tolva.horario)/60).toFixed(2);}catch(error){}});
+    document.getElementById('hum_nivel').readOnly=true;
+    document.getElementById('hum_nivel').closest('tr').style.display=parametros.humNivel?'':'none';
+    bloquearFormulario(false);
+};
+prepararPayload = function() {
+    const data=prepararBase();
+    Object.entries(capturaInforme).forEach(([campo,id])=>{data.parametrosGenerales[campo]=document.getElementById(id).value;});
+    const mantenimientos=Array.from(document.querySelectorAll('#mantenimientosBody tr')).map(fila=>{const campos=fila.querySelectorAll('input,select');return {tipo:campos[0].value,equipo:campos[1].value.trim(),lado:campos[2].value,cantidad:campos[3].value};}).filter(item=>Object.values(item).some(Boolean));
+    mantenimientos.forEach(item=>{if(!item.tipo||!item.equipo||!item.lado||!Number.isInteger(Number(item.cantidad))||Number(item.cantidad)<1)throw new Error('Complete tipo, equipo, lado y cantidad de cada mantenimiento.');});
+    data.parametrosGenerales.mantenimientos=mantenimientos;
+    data.parametrosGenerales.mantenimientoRevisado=document.getElementById('mantenimiento_revisado').checked;
+    data.tolvas.forEach(item=>{const fila=Array.from(document.querySelectorAll('#tablaTolvasBody tr')).find(f=>f.dataset.id===item.id);item.aperturaAgua=fila.querySelector('[name^="tolva_agua_"]').value;item.minutos=calcularMinutosDescarga(item.horario);item.duracion=item.minutos/60;});
+    data.versionCaptura=5;
+    return data;
+};
+const detectarVaciosBase=detectarCamposVacios;
+detectarCamposVacios=function(data){const faltan=detectarVaciosBase(data);if(data.parametrosGenerales.horasOperativas==='')faltan.push('Informe semanal: faltan las horas operativas de este turno.');if(data.parametrosGenerales.humNivelAceite==='')faltan.push('Informe semanal: falta el nivel de aceite del humidificador.');if(!data.parametrosGenerales.mantenimientoRevisado)faltan.push('Informe semanal: falta confirmar la revisión de cambios de componentes.');if(data.tolvas.some(item=>item.aperturaAgua===''))faltan.push('Informe semanal: falta la apertura de agua de alguna descarga.');return faltan;};
+window.addEventListener('DOMContentLoaded',()=>{
+    const filaHum=document.getElementById('hum_nivel').closest('tr');filaHum.cells[filaHum.cells.length-2].textContent='Dato anterior del humidificador (sin clasificar)';document.getElementById('hum_nivel').readOnly=true;filaHum.style.display='none';
+    const filaAceite=document.createElement('tr');filaAceite.innerHTML='<td><strong>HUMIDIFICADOR</strong></td><td>Nivel de aceite</td><td><input type="text" id="hum_nivel_aceite" aria-label="Nivel de aceite del humidificador" placeholder="Ej: 3/4"></td>';filaHum.after(filaAceite);
+    const encabezado=document.querySelector('#tablaTolvasBody').closest('table').querySelector('thead tr');const th=document.createElement('th');th.textContent='Apertura agua (%)';encabezado.appendChild(th);
+    const seccion=document.createElement('div');seccion.className='section';
+    seccion.innerHTML='<h3>7. Datos para el informe semanal</h3><p>Complete estos datos al cierre de su turno. Las horas corresponden únicamente a este turno (máximo 12). La semana del informe va de lunes a domingo.</p><label for="horas_operativas">Horas operativas del turno</label><input id="horas_operativas" type="number" min="0" max="12" step="0.01" placeholder="Ej: 12"><label for="motivo_parada">Paradas y motivos</label><textarea id="motivo_parada" placeholder="Horario y motivo de las paradas, si las hubo"></textarea><h4>Cambios de componentes</h4><p>Registre cada cambio por equipo y lado. Si no hubo cambios, deje la tabla vacía y confirme la revisión.</p><div style="overflow-x:auto"><table><thead><tr><th>Componente</th><th>Equipo / Tolva</th><th>Lado</th><th>Cantidad</th><th>Acción</th></tr></thead><tbody id="mantenimientosBody"></tbody></table></div><button type="button" id="agregar_mantenimiento" class="btn-secondary">Añadir cambio de componente</button><label style="display:block;margin:14px 0"><input id="mantenimiento_revisado" type="checkbox" style="width:auto"> Revisé los cambios de componentes de este turno</label><label for="estado_equipos">Estado de ductos, campanas, compuertas y válvulas</label><textarea id="estado_equipos" placeholder="Indique área, código del equipo y estado observado"></textarea><label for="pendientes_turno">Pendientes y recomendaciones</label><textarea id="pendientes_turno" placeholder="Trabajos pendientes o recomendaciones para el cierre semanal"></textarea>';
+    const enviar=document.querySelector('#colectorForm .btn-submit');enviar.parentNode.insertBefore(seccion,enviar);
+    document.getElementById('agregar_mantenimiento').addEventListener('click',()=>agregarMantenimiento());
+    bloquearFormulario(false);
+});
