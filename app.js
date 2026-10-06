@@ -368,7 +368,7 @@ async function solicitarAPI(datos, autenticar = true) {
     const controlador = new AbortController();
     const limite = setTimeout(() => controlador.abort(), 90000);
     try {
-        const respuesta = await fetch(URL_API_GOOGLESHEETS, {method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(autenticar ? {...datos,token} : datos),signal:controlador.signal});
+        const respuesta = await fetch(URL_API_GOOGLESHEETS + "?solicitud=" + encodeURIComponent(crypto.randomUUID()), {method:"POST",cache:"no-store",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(autenticar ? {...datos,token} : datos),signal:controlador.signal});
         if (!respuesta.ok) throw new Error("El servicio no está disponible (" + respuesta.status + ").");
         const resultado = await respuesta.json();
         if (resultado.status !== "success") {
