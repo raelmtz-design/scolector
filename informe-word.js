@@ -137,7 +137,18 @@ const InformeWord = (() => {
           texto(caption,foto?mostrar(foto.descripcion):'');
           if(foto){
             progreso('Preparando fotografía '+(++procesadas)+' de '+totalFotos+'…');
-            let datos=cacheFotos.get(foto.id);if(!datos){const archivo=await obtenerFoto(foto.id);datos=await imagen('data:'+archivo.tipo+';base64,'+archivo.base64);cacheFotos.set(foto.id,datos);}
+            let datos=cacheFotos.get(foto.id);if(!datos){
+              let archivo;
+              for(let intento=0;intento<3;intento++){
+                try{archivo=await obtenerFoto(foto.id);break;}
+                catch(error){
+                  if(intento===2||!/404|429|500|502|503|504|fetch|network|tardó demasiado/i.test(error.message))throw Error('Fotografía «'+(foto.descripcion||foto.id)+'»: '+error.message);
+                  progreso('Reintentando fotografía '+procesadas+' de '+totalFotos+' ('+(intento+2)+'/3)…');
+                  await new Promise(resolve=>setTimeout(resolve,1500*(intento+1)));
+                }
+              }
+              datos=await imagen('data:'+archivo.tipo+';base64,'+archivo.base64);cacheFotos.set(foto.id,datos);
+            }
             celda.append(figura(datos,2500000,1900000));
           }else celda.append(crear(doc,'p'));
         }
