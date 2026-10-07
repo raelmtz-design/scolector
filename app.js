@@ -363,6 +363,10 @@ let cargandoGuardia = false;
 const camposGenerales = {lubPresion:"lub_presion",lubTempTanque:"lub_temp_tanque",lubTempSalida:"lub_temp_salida",nivelAceiteMotriz:"nivel_acei_ladomotriz",nivelAceiteLibre:"nivel_acei_ladolibre",compuertaApertura:"compuerta_apertura",tanquePresion:"tanque_presion",sopEntrada:"sop_entrada",sopSalida:"sop_salida",sopTransmisor:"sop_transmisor",humNivel:"hum_nivel",tolvaMot01:"tolva_mot_01",tolvaMot02:"tolva_mot_02",tolvaMot03:"tolva_mot_03"};
 const camposLectura = {presIngreso:"pres_ingreso",presSalida:"pres_salida",presDiferencia:"pres_dif",presAire:"pres_aire",presLubricacion:"pres_lub",tempChumLibre:"temp_chum_libre",tempChumMot:"temp_chum_mot",tempMotVent:"temp_mot_vent",tempMotAcop:"temp_mot_acop",vibLibre:"vib_libre",vibMot:"vib_mot",compuerta:"comp"};
 async function solicitarAPI(datos, autenticar = true) {
+    if (autenticar && location.protocol !== 'file:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        if (datos.accion === 'semana') return solicitarLecturaInforme(datos);
+        if (datos.accion === 'fotoInforme') return recuperarFotoInforme(datos);
+    }
     const token = sessionStorage.getItem("colector_token");
     if (autenticar && !token) throw new Error("Inicie sesión para continuar.");
     const controlador = new AbortController();
@@ -562,4 +566,33 @@ function confirmarAccion(mensaje) {
         dialogo.addEventListener('cancel',e=>{e.preventDefault();terminar(false);});
         acciones.append(conservar,descartar);dialogo.append(titulo,texto,acciones);document.body.appendChild(dialogo);dialogo.showModal();conservar.focus();
     });
+}
+async function solicitarLecturaInforme(datos) {
+    const token = sessionStorage.getItem('colector_token');
+    if (!token) throw new Error('Inicie sesión para continuar.');
+    const controlador = new AbortController();
+    const limite = setTimeout(() => controlador.abort(), 65000);
+    try {
+        const r = await fetch('/api/lectura', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...datos,token}),signal:controlador.signal,cache:'no-store'});
+        if (!r.ok) throw new Error('Servicio de lectura ('+r.status+'). Reintente.');
+        const resultado = await r.json();
+        if(resultado.status!=='success')throw new Error(resultado.message||'No se pudo recuperar la lectura.');
+        return resultado;
+    } finally {clearTimeout(limite);}
+}
+async function recuperarFotoInforme(datos) {
+    const partes=[];let offset=0,primera=null;
+    do {
+        let parte;
+        for(let intento=0;intento<3;intento++) {
+            try {parte=await solicitarLecturaInforme({...datos,offset});break;}
+            catch(e) {if(intento===2||!/502|503|504|429|fetch|network|abort|Reintente/i.test(e.message))throw e;await new Promise(r=>setTimeout(r,1000*(intento+1)));}
+        }
+        if(!primera)primera=parte;
+        if(parte.id!==datos.id||parte.offset!==offset||parte.total!==primera.total||parte.huella!==primera.huella||typeof parte.base64!=='string'||!parte.base64.length)throw new Error('La fotografía cambió o llegó incompleta. Consulte la semana de nuevo.');
+        partes.push(parte.base64);offset+=parte.base64.length;
+        if(offset>parte.total||offset>16777216||(parte.siguiente!==null&&parte.siguiente!==offset))throw new Error('Partes de fotografía inconsistentes.');
+        if(parte.siguiente===null){if(offset!==parte.total)throw new Error('Fotografía incompleta.');break;}
+    }while(offset<primera.total);
+    return {...primera,base64:partes.join('')};
 }
